@@ -39,9 +39,12 @@ keycloak --> browser : 302 Redirect to Django callback\n?code=AUTHORIZATION_CODE
 browser -> django : GET /oidc/callback/?code=...
 django -> keycloak : POST /token\n(code, client_secret)
 keycloak --> django : id_token + access_token
-django -> keycloak : GET /userinfo (optional)
-keycloak --> django : Claims (email, name, roles)
-django -> django : KeycloakOIDCAuthenticationBackend\nmaps claims -> Django User
+django -> django : KeycloakOIDCAuthenticationBackend\nmaps ID token + access token claims
+note right of django
+  Userinfo is skipped: tokens are issued
+  for localhost:PORT but Django calls
+  Keycloak internally at keycloak:8080
+end note
 django -> django_db : CREATE or UPDATE user\n(is_staff from admin role)
 django -> django : Store tokens + roles in session
 django --> browser : 302 Redirect to /api/profile/

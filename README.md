@@ -71,29 +71,36 @@ Django acts as an **OIDC Relying Party (RP)**. Keycloak is the **Identity Provid
 5. Claims are mapped to a Django user via `KeycloakOIDCAuthenticationBackend`.
 6. Django stores the session cookie; subsequent requests are authenticated locally.
 
-### PlantUML sequence diagram
+### Authentication flow diagram
 
-Render the diagram with any PlantUML viewer, or paste the contents of [`docs/diagrams/django-keycloak-flow.puml`](docs/diagrams/django-keycloak-flow.puml) into [plantuml.com/plantuml](https://www.plantuml.com/plantuml/uml/).
+GitHub renders **Mermaid** diagrams in Markdown. The diagram below appears automatically on github.com:
 
-```plantuml
-@startuml
-actor User
-participant Django
-participant Keycloak
-database DjangoDB
+```mermaid
+sequenceDiagram
+    actor User
+    participant Browser
+    participant Django as Django App :8000
+    participant Keycloak as Keycloak :8080
+    participant DjangoDB as Django DB
 
-User -> Django : GET /api/profile/
-Django --> User : Redirect /oidc/authenticate/
-User -> Keycloak : Login
-Keycloak --> User : Redirect /oidc/callback/?code=...
-User -> Django : Callback with code
-Django -> Keycloak : Exchange code for tokens
-Django -> DjangoDB : Create/update user from claims
-Django --> User : Profile JSON (session cookie)
-@enduml
+    User->>Browser: Open /api/profile/
+    Browser->>Django: GET /api/profile/
+    Django-->>Browser: 302 → /oidc/authenticate/
+    Browser->>Django: GET /oidc/authenticate/
+    Django-->>Browser: 302 → Keycloak /auth
+    Browser->>Keycloak: Login (username/password)
+    Keycloak-->>Browser: 302 → /oidc/callback/?code=...
+    Browser->>Django: GET /oidc/callback/?code=...
+    Django->>Keycloak: POST /token (code + client_secret)
+    Keycloak-->>Django: id_token + access_token
+    Note over Django: Map claims from ID token<br/>(KeycloakOIDCAuthenticationBackend)
+    Django->>DjangoDB: CREATE or UPDATE user
+    Django-->>Browser: 302 → /api/profile/
+    Browser->>Django: GET /api/profile/ (session cookie)
+    Django-->>Browser: 200 JSON profile
 ```
 
-See the full diagram in [`docs/diagrams/django-keycloak-flow.puml`](docs/diagrams/django-keycloak-flow.puml).
+**PlantUML (full detail):** GitHub does not render PlantUML in Markdown. For the expanded diagram (startup, logout, both databases), open [`docs/diagrams/django-keycloak-flow.puml`](docs/diagrams/django-keycloak-flow.puml) in [plantuml.com](https://www.plantuml.com/plantuml/uml/) or a PlantUML IDE plugin.
 
 ## Keycloak configuration
 
