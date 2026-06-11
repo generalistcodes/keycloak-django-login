@@ -73,7 +73,7 @@ Django acts as an **OIDC Relying Party (RP)**. Keycloak is the **Identity Provid
 
 ### Authentication flow diagram
 
-GitHub renders **Mermaid** diagrams in Markdown. The diagram below appears automatically on github.com:
+The diagram below illustrates the step-by-step authentication flow between the user, browser, Django application, Keycloak identity provider, and Django's local database. It shows how requests and redirects occur during login, token exchange, user mapping, and authenticated API access.
 
 ```mermaid
 sequenceDiagram
