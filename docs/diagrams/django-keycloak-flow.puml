@@ -1,0 +1,62 @@
+@startuml django-keycloak-flow
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam sequenceMessageAlign center
+
+title Django + Keycloak OIDC Authentication Flow
+
+actor User as user
+participant "Browser" as browser
+participant "Django App\n:8000" as django
+database "Django DB\n(PostgreSQL)" as django_db
+participant "Keycloak\n:8080" as keycloak
+database "Keycloak DB\n(PostgreSQL)" as keycloak_db
+
+== Startup ==
+note over django, keycloak
+  ./start.sh starts two Compose stacks on a shared Docker network:
+  - compose/keycloak.yml  -> keycloak + keycloak-db
+  - compose/django.yml    -> django + django-db
+end note
+
+== 1. User requests protected resource ==
+user -> browser : Open /api/profile/
+browser -> django : GET /api/profile/
+django --> browser : 302 Redirect to /oidc/authenticate/
+browser -> django : GET /oidc/authenticate/
+django --> browser : 302 Redirect to Keycloak /auth\n(client_id=django-app, redirect_uri=callback)
+
+== 2. Keycloak login ==
+browser -> keycloak : Authorization request
+keycloak -> keycloak_db : Validate realm + client config
+keycloak --> browser : Login page
+user -> browser : Enter username/password
+browser -> keycloak : POST credentials
+keycloak -> keycloak_db : Authenticate user + load roles
+keycloak --> browser : 302 Redirect to Django callback\n?code=AUTHORIZATION_CODE
+
+== 3. Token exchange + user sync ==
+browser -> django : GET /oidc/callback/?code=...
+django -> keycloak : POST /token\n(code, client_secret)
+keycloak --> django : id_token + access_token
+django -> keycloak : GET /userinfo (optional)
+keycloak --> django : Claims (email, name, roles)
+django -> django : KeycloakOIDCAuthenticationBackend\nmaps claims -> Django User
+django -> django_db : CREATE or UPDATE user\n(is_staff from admin role)
+django -> django : Store tokens + roles in session
+django --> browser : 302 Redirect to /api/profile/
+
+== 4. Authenticated API response ==
+browser -> django : GET /api/profile/ (session cookie)
+django -> django_db : Load user from session
+django --> browser : 200 JSON profile
+
+== 5. Logout ==
+user -> browser : Click logout
+browser -> django : GET /oidc/logout/
+django -> django : Clear Django session
+django --> browser : Redirect to Keycloak logout
+browser -> keycloak : End SSO session
+keycloak --> browser : Redirect to Django home
+
+@enduml

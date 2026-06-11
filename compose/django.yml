@@ -1,0 +1,59 @@
+services:
+  django-db:
+    image: postgres:16-alpine
+    container_name: django-db
+    environment:
+      POSTGRES_DB: django_app
+      POSTGRES_USER: django
+      POSTGRES_PASSWORD: django
+    volumes:
+      - django_db_data:/var/lib/postgresql/data
+    networks:
+      - auth-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U django -d django_app"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  django:
+    build:
+      context: ../django_app
+      dockerfile: Dockerfile
+    container_name: django-app
+    environment:
+      DJANGO_SECRET_KEY: dev-secret-key-change-in-production
+      DJANGO_DEBUG: "true"
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,django
+      DATABASE_URL: postgres://django:django@django-db:5432/django_app
+      OIDC_RP_CLIENT_ID: django-app
+      OIDC_RP_CLIENT_SECRET: django-app-secret
+      OIDC_OP_AUTHORIZATION_ENDPOINT: http://localhost:${KEYCLOAK_HTTP_PORT:-8080}/realms/tutorial/protocol/openid-connect/auth
+      OIDC_OP_TOKEN_ENDPOINT: http://keycloak:8080/realms/tutorial/protocol/openid-connect/token
+      OIDC_OP_USER_ENDPOINT: http://keycloak:8080/realms/tutorial/protocol/openid-connect/userinfo
+      OIDC_OP_JWKS_ENDPOINT: http://keycloak:8080/realms/tutorial/protocol/openid-connect/certs
+      OIDC_OP_LOGOUT_ENDPOINT: http://localhost:${KEYCLOAK_HTTP_PORT:-8080}/realms/tutorial/protocol/openid-connect/logout
+      OIDC_RP_SIGN_ALGO: RS256
+      LOGIN_REDIRECT_URL: http://localhost:8000/api/profile/
+      LOGOUT_REDIRECT_URL: http://localhost:8000/
+    ports:
+      - "8000:8000"
+    depends_on:
+      django-db:
+        condition: service_healthy
+    networks:
+      - auth-network
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+volumes:
+  django_db_data:
+
+networks:
+  auth-network:
+    external: true
+    name: keycloak-django-network
